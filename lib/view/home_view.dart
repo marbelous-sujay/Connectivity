@@ -44,8 +44,8 @@ class _HomeViewState extends State<HomeView> {
   double eegFrequency = 250;
   double tdcsCurrent = 1.5;
 
-  String batteryLevel = '--';
-  String chargingStatus = '------';
+  String batteryLevel = '';
+  String chargingStatus = '';
   String mode = 'IDLE';
   TextEditingController eegTimeController = TextEditingController();
   TextEditingController tdcsTimeController = TextEditingController();
@@ -78,6 +78,7 @@ class _HomeViewState extends State<HomeView> {
       // getDeviceMode();
 
       discoverServices();
+      readBatteryData();
       getBatteryInfo();
     });
   }
@@ -92,13 +93,13 @@ class _HomeViewState extends State<HomeView> {
 
       if(batData.isNotEmpty) {
         setState(() {
-        if (batData[0] == 10) {
+        if (batData[1] == 10) {
           chargingStatus = 'Charging';
         } else {
           chargingStatus = 'Discharging';
         }
 
-        batteryLevel = batData[1].toString();
+        batteryLevel = batData[0].toString();
       });
       }
     } catch(e, stackTrace){
@@ -108,7 +109,6 @@ class _HomeViewState extends State<HomeView> {
   }
 
   startTdcs() {
-    print("😊😊😊😊😊😊😊 Started running TDCS");
 
     _connectionStateSubscription =
         widget.device.connectionState.listen((state) {
@@ -119,7 +119,7 @@ class _HomeViewState extends State<HomeView> {
       BluetoothCharacteristic data =
           getBluetoothCharacteristics(easeServiceID, uuidTdcsRead);
 
-      readValue(data);
+      // readValue(data);
       //TODO:::::: reading till here
 
       data.setNotifyValue(true);
@@ -165,24 +165,30 @@ class _HomeViewState extends State<HomeView> {
   }
 
   stopTdcs() {
-    print("😊😊😊😊😊😊😊 Stopped running TDCS");
+    BluetoothCharacteristic data =
+    getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
+
+    writeValue(data, [1]);
   }
 
   stopEeg() {
-    print("😊😊😊😊😊😊😊 Stopped running EEG");
+
+    BluetoothCharacteristic data =
+    getBluetoothCharacteristics(easeServiceID, uuidEegSett);
+
+    writeValue(data, [1]);
   }
 
   startEeg() {
     _connectionStateSubscription =
         widget.device.connectionState.listen((state) {
       _connectionState = state;
-      discoverServices();
 
       //TODO:::::::::: TO read the EEG data
       BluetoothCharacteristic data =
           getBluetoothCharacteristics(easeServiceID, uuidEegRead);
 
-      readValue(data);
+      // readValue(data);
 
       //TODO:::::::::: TO read the EEG data till here
 
@@ -236,13 +242,13 @@ class _HomeViewState extends State<HomeView> {
         print("^^^^^^^^^^New Battery Data: $value");
         setState(() {
 
-          if(value[0] == 10) {
+          if(value[1] == 10) {
             chargingStatus = 'Charging';
           } else{
             chargingStatus = 'Discharging';
           }
 
-          batteryLevel = value[1].toString();
+          batteryLevel = value[0].toString();
         });
         // onValueReceived is updated:
         //   - anytime read() is called
@@ -434,12 +440,6 @@ class _HomeViewState extends State<HomeView> {
                     'Battery Level : $batteryLevel%',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-
-                  ElevatedButton(onPressed: (){
-                    readBatteryData();
-                  },
-                      child: const Text('Get Battery Data')),
-
                   const SizedBox(height: 30),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -453,7 +453,7 @@ class _HomeViewState extends State<HomeView> {
                         height: 20,
                         width: 20,
                         color:
-                            mode == 'Charging' ? Colors.green : Colors.yellow,
+                            mode == 'Charging' ? Colors.green : Colors.orangeAccent,
                       )
                     ],
                   ),
@@ -602,7 +602,7 @@ class _HomeViewState extends State<HomeView> {
                                       }
                                     }
                                   : () {
-                                      // stopEEG();
+                                      stopEeg();
 
                                       setState(() {
                                         eegButtonText = 'Run EEG';
@@ -717,14 +717,14 @@ class _HomeViewState extends State<HomeView> {
                                       }
                                     }
                                   : () {
-                                      // stopTDCS();
+                                      stopTdcs();
                                       setState(() {
                                         tdcsButtonText = 'Run tDCS';
                                       });
                                     },
-                              child: const Text(
-                                'Run tDCS',
-                                style: TextStyle(color: Colors.white),
+                              child: Text(
+                                tdcsButtonText,
+                                style: const TextStyle(color: Colors.white),
                               ))),
                     ],
                   ),
