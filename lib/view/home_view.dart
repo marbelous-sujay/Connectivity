@@ -490,6 +490,14 @@ class _HomeViewState extends State<HomeView> {
           style: TextStyle(color: Colors.white),
         ),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            widget.device.disconnect();
+            Navigator.of(context).pop();
+          },
+
+        ),
         backgroundColor: Colors.lightGreen,
       ),
       body: Center(
