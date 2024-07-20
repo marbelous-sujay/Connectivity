@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'package:connectivity/utils/snackbar.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -18,9 +19,15 @@ class _ScanScreenState extends State<ScanScreen> {
   late StreamSubscription<List<ScanResult>> _scanResultsSubscription;
   late StreamSubscription<bool> _isScanningSubscription;
 
+  bool locationPermissionGranted = false;
+  bool nearbyPermissionGranted = false;
+
   @override
   void initState() {
     super.initState();
+
+    getLocationPermission();
+    getNearbyPermission();
 
     Future.delayed(const Duration(seconds: 2), () {
       _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
@@ -75,6 +82,26 @@ class _ScanScreenState extends State<ScanScreen> {
       setState(() {});
     }
   }
+
+  Future getLocationPermission() async {
+    if (await Permission.location.request().isGranted) {
+      locationPermissionGranted = true;
+    } else if (await Permission.location.request().isPermanentlyDenied) {
+      throw('location.request().isPermanentlyDenied');
+    } else if (await Permission.location.request().isDenied) {
+      throw('location.request().isDenied');
+    }
+  }
+  Future getNearbyPermission() async {
+    if (await Permission.nearbyWifiDevices.request().isGranted) {
+      nearbyPermissionGranted = true;
+    } else if (await Permission.nearbyWifiDevices.request().isPermanentlyDenied) {
+      throw('location.request().isPermanentlyDenied');
+    } else if (await Permission.nearbyWifiDevices.request().isDenied) {
+      throw('location.request().isDenied');
+    }
+  }
+
 
   Future onStopPressed() async {
     try {

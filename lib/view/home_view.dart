@@ -72,10 +72,13 @@ class _HomeViewState extends State<HomeView> {
 
   late DeviceIdentifier remoteId;
 
-  BluetoothConnectionState _connectionState =
-      BluetoothConnectionState.disconnected;
-  late StreamSubscription<BluetoothConnectionState>
-      _connectionStateSubscription;
+  late BluetoothCharacteristic batteryData;
+  late BluetoothCharacteristic eegData;
+  late BluetoothCharacteristic tdcsData;
+
+  late final StreamSubscription<List<int>> batteryListener;
+  late final StreamSubscription<List<int>> eegListener;
+  late final StreamSubscription<List<int>> tdcsListener;
 
   BluetoothCharacteristic getBluetoothCharacteristics(
       String serviceId, String characteristicId) {
@@ -93,14 +96,31 @@ class _HomeViewState extends State<HomeView> {
 
     Future.delayed(const Duration(seconds: 5), () {
       discoverServices();
+
+      tdcsData =
+          getBluetoothCharacteristics(easeServiceID, uuidTdcsRead);
+      eegData =
+          getBluetoothCharacteristics(easeServiceID, uuidEegRead);
+      batteryData =
+      getBluetoothCharacteristics(batteryServiceID, uuidBatteryStatus);
+
+      listenToServices();
       readBatteryData();
-      getBatteryInfo();
     });
+  }
+
+  @override
+  dispose() {
+    // _connectionStateSubscription.cancel();
+    batteryListener.cancel();
+    eegListener.cancel();
+    tdcsListener.cancel();
+    super.dispose();
   }
 
   Future<void> listToCsv(String csv, String fileName) async {
     String csvFileDirectory =
-        '${(await getApplicationDocumentsDirectory()).path}/eeg_data';
+        '${(await getApplicationDocumentsDirectory()).path}/ease_data';
 
     if (!Directory(csvFileDirectory).existsSync()) {
       await Directory(csvFileDirectory).create(recursive: true);
@@ -199,15 +219,73 @@ class _HomeViewState extends State<HomeView> {
     }
   }
 
+  Future<void> listenToServices() async {
+
+    widget.device.connectionState.listen((state) {
+
+      // if(state== BluetoothConnectionState.disconnected){
+      //   Navigator.of(context).push(
+      //     MaterialPageRoute(
+      //       builder: (context) => const LandingScreen(),
+      //     ),
+      //   );
+      // }  else {
+
+        ///TDCS listener
+        tdcsData.setNotifyValue(true);
+        tdcsListener = tdcsData.onValueReceived.listen((value) {
+          // print("^^^^^^^^^^TDCS Data: $value");
+          handelValueChangeTdcs(value);
+        });
+
+
+        ///EEG listener
+        eegData.setNotifyValue(true);
+        eegListener = eegData.onValueReceived.listen((value) {
+          // print("^^^^^^^^^^New EEG Data: $value");
+          handleValueChangeEEG(value);
+        });
+
+
+        ///Battery listener
+        batteryData.setNotifyValue(true);
+        batteryListener = batteryData.onValueReceived.listen((value) {
+          // print("^^^^^^^^^^New Battery Data: $value");
+          setState(() {
+            if (value[1] == 10) {
+              chargingStatus = 'Charging';
+            } else {
+              chargingStatus = 'Discharging';
+            }
+
+            batteryLevel = value[0].toString();
+          });
+        });
+      // }
+
+    });
+
+  }
+
   void deviceStatus(int timeInSec, String currentMode) {
     setState(() {
       mode = currentMode;
+      if(mode=='EEG'){
+        eegButtonText = 'Stop EEG';
+      } else if(mode == 'tDCS'){
+        tdcsButtonText = 'Stop tDCS';
+      } else{
+        eegButtonText = 'Run EEG';
+        tdcsButtonText = 'Run tDCS';
+      }
     });
 
     Future.delayed(Duration(seconds: timeInSec), () {
       print("--------------------------------------Future also printed $mode");
       setState(() {
         mode = 'IDLE';
+        eegButtonText = 'Run EEG';
+        tdcsButtonText = 'Run tDCS';
         print("--------------------------------------$mode");
       });
     });
@@ -237,31 +315,6 @@ class _HomeViewState extends State<HomeView> {
   }
 
   startTdcs() {
-    _connectionStateSubscription =
-        widget.device.connectionState.listen((state) {
-      _connectionState = state;
-      // discoverServices();
-
-      //TODO::::::: to read the data
-      BluetoothCharacteristic data =
-          getBluetoothCharacteristics(easeServiceID, uuidTdcsRead);
-
-      // readValue(data);
-      //TODO:::::: reading till here
-
-      data.setNotifyValue(true);
-      final subscription = data.onValueReceived.listen((value) {
-        print("^^^^^^^^^^TDCS Data: $value");
-        handelValueChangeTdcs(value);
-
-        // onValueReceived is updated:
-        //   - anytime read() is called
-        //   - anytime a notification arrives (if subscribed)
-      });
-
-      // int tdcsTimeElapsed = 0;
-
-      //TODO::::::: to write the data
       deviceStatus(int.parse(tdcsTimeController.text), 'tDCS');
 
       BluetoothCharacteristic data2 =
@@ -283,15 +336,6 @@ class _HomeViewState extends State<HomeView> {
         (0xff & ((tdcsTime - 60) >> 16)),
         (0xff & ((tdcsTime - 60) >> 24)),
       ]);
-
-      //TODO::::::: to write the data till here
-
-      // cleanup: cancel subscription when disconnected
-      //           device.cancelWhenDisconnected(subscription);
-      if (mounted) {
-        setState(() {});
-      }
-    });
   }
 
   stopTdcs() {
@@ -310,31 +354,6 @@ class _HomeViewState extends State<HomeView> {
 
   startEeg() {
     eegCounts = 0;
-
-    _connectionStateSubscription =
-        widget.device.connectionState.listen((state) {
-      _connectionState = state;
-
-      //TODO:::::::::: TO read the EEG data
-      BluetoothCharacteristic data =
-          getBluetoothCharacteristics(easeServiceID, uuidEegRead);
-
-      // readValue(data);
-
-      //TODO:::::::::: TO read the EEG data till here
-
-      data.setNotifyValue(true);
-      final subscription = data.onValueReceived.listen((value) {
-        print("^^^^^^^^^^New EEG Data: $value");
-
-        handleValueChangeEEG(value);
-
-        // onValueReceived is updated:
-        //   - anytime read() is called
-        //   - anytime a notification arrives (if subscribed)
-      });
-
-      //TODO:::::::::: TO write the EEG data
       deviceStatus(int.parse(eegTimeController.text), 'EEG');
       BluetoothCharacteristic data2 =
           getBluetoothCharacteristics(easeServiceID, uuidEegSett);
@@ -351,61 +370,6 @@ class _HomeViewState extends State<HomeView> {
           (0xff & eegTime >> 24)
         ],
       );
-
-      //TODO:::::::::: TO write the EEG data
-
-// cleanup: cancel subscription when disconnected
-//           device.cancelWhenDisconnected(subscription);
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
-
-  void getBatteryInfo() {
-    _connectionStateSubscription =
-        widget.device.connectionState.listen((state) async {
-      _connectionState = state;
-      // discoverServices();
-
-      BluetoothCharacteristic data =
-          getBluetoothCharacteristics(batteryServiceID, uuidBatteryStatus);
-
-      data.setNotifyValue(true);
-      final subscription = data.onValueReceived.listen((value) {
-        print("^^^^^^^^^^New Battery Data: $value");
-        setState(() {
-          if (value[1] == 10) {
-            chargingStatus = 'Charging';
-          } else {
-            chargingStatus = 'Discharging';
-          }
-
-          batteryLevel = value[0].toString();
-        });
-        // onValueReceived is updated:
-        //   - anytime read() is called
-        //   - anytime a notification arrives (if subscribed)
-      });
-    });
-  }
-
-  getDeviceMode() {
-    _connectionStateSubscription =
-        widget.device.connectionState.listen((state) {
-      _connectionState = state;
-    });
-
-    BluetoothCharacteristic data =
-        getBluetoothCharacteristics(easeServiceID, uuidDevSett);
-
-    // readValue(data);
-
-    data.setNotifyValue(true);
-    final subscription = data.onValueReceived.listen((value) {
-      print("^^^^^^^^^^New Device Mode Data: $value");
-      setState(() {});
-    });
   }
 
   Future<List<int>> readValue(BluetoothCharacteristic characteristic) async {
@@ -426,8 +390,7 @@ class _HomeViewState extends State<HomeView> {
     return [];
   }
 
-  Future<void> writeValue(
-      BluetoothCharacteristic characteristic, List<int> writeValue) async {
+  Future<void> writeValue(BluetoothCharacteristic characteristic, List<int> writeValue) async {
     BluetoothCharacteristic data = characteristic;
 
     print("************************ The write value is  $writeValue");
@@ -490,7 +453,9 @@ class _HomeViewState extends State<HomeView> {
         backgroundColor: Colors.lightGreen,
       ),
       body: Center(
-          child: Padding(
+          child: batteryLevel.isEmpty
+              ? const CircularProgressIndicator(color: Colors.green,)
+              : Padding(
         padding: const EdgeInsets.all(25.0),
         child: SingleChildScrollView(
           child: Column(
