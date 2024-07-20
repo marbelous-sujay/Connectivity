@@ -80,6 +80,25 @@ class _HomeViewState extends State<HomeView> {
   late final StreamSubscription<List<int>> eegListener;
   late final StreamSubscription<List<int>> tdcsListener;
 
+  Timer? timer;
+  int remainingTime = 0;
+
+  void startTimer(String timeInSec) {
+    if (timer != null) {
+      timer!.cancel();
+    }
+    remainingTime = int.tryParse(timeInSec) ?? 0;
+    timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (remainingTime > 0) {
+        setState(() {
+          remainingTime--;
+        });
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
   BluetoothCharacteristic getBluetoothCharacteristics(
       String serviceId, String characteristicId) {
     return BluetoothCharacteristic(
@@ -315,6 +334,10 @@ class _HomeViewState extends State<HomeView> {
   }
 
   startTdcs() {
+    eegCounts=0;
+
+    startTimer(tdcsTimeController.text);
+
       deviceStatus(int.parse(tdcsTimeController.text), 'tDCS');
 
       BluetoothCharacteristic data2 =
@@ -339,6 +362,12 @@ class _HomeViewState extends State<HomeView> {
   }
 
   stopTdcs() {
+    remainingTime =0;
+
+    setState(() {
+      mode='IDLE';
+    });
+
     BluetoothCharacteristic data =
         getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
 
@@ -346,6 +375,12 @@ class _HomeViewState extends State<HomeView> {
   }
 
   stopEeg() {
+    remainingTime = 0;
+
+    setState(() {
+      mode='IDLE';
+    });
+
     BluetoothCharacteristic data =
         getBluetoothCharacteristics(easeServiceID, uuidEegSett);
 
@@ -354,6 +389,9 @@ class _HomeViewState extends State<HomeView> {
 
   startEeg() {
     eegCounts = 0;
+
+    startTimer(eegTimeController.text);
+
       deviceStatus(int.parse(eegTimeController.text), 'EEG');
       BluetoothCharacteristic data2 =
           getBluetoothCharacteristics(easeServiceID, uuidEegSett);
@@ -443,6 +481,8 @@ class _HomeViewState extends State<HomeView> {
 
   @override
   Widget build(BuildContext context) {
+    int minutes = remainingTime ~/ 60;
+    int seconds = remainingTime % 60;
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -500,7 +540,7 @@ class _HomeViewState extends State<HomeView> {
                       Container(
                         height: 20,
                         width: 20,
-                        color: mode == 'EEF'
+                        color: mode == 'EEG'
                             ? Colors.purpleAccent
                             : mode == 'tDCS'
                                 ? Colors.blue
@@ -510,8 +550,8 @@ class _HomeViewState extends State<HomeView> {
                   ),
 
                   const SizedBox(height: 30),
-                  const Text(
-                    'Time : 00:00:00',
+                   Text(
+                    'Time : $minutes:${seconds.toString().padLeft(2, '0')}',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
