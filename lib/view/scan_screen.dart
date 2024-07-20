@@ -22,38 +22,32 @@ class _ScanScreenState extends State<ScanScreen> {
   void initState() {
     super.initState();
 
-    _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
-      for (int i = 0; i < results.length; i++) {
-        if (results[i].device.advName == "EASE") {
+    Future.delayed(const Duration(seconds: 2), () {
+      _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
+        for (int i = 0; i < results.length; i++) {
+          if (results[i].device.advName == "EASE") {
 
-          results[i].device.connect();
-          FlutterBluePlus.stopScan();
+            results[i].device.connect();
+            FlutterBluePlus.stopScan();
 
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => HomeView(
-                // device: results[i],
-                device: results[i].device,
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => HomeView(
+                  // device: results[i],
+                  device: results[i].device,
+                ),
               ),
-            ),
-          );
+            );
+          }
         }
-      }
+      }, onError: (e) {
+        Snackbar.show(ABC.b, prettyException("Scan Error:", e), success: false);
+      });
 
-      if (mounted) {
-        setState(() {});
-      }
-    }, onError: (e) {
-      Snackbar.show(ABC.b, prettyException("Scan Error:", e), success: false);
-    });
-
-    _isScanningSubscription = FlutterBluePlus.isScanning.listen((state) {
-      _isScanning = state;
-      print("-------------------Scan Subscription");
-      print(state);
-      if (mounted) {
-        setState(() {});
-      }
+      onScanPressed();
+      setState(() {
+        _isScanning = true;
+      });
     });
   }
 

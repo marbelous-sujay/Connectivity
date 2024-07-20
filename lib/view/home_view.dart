@@ -99,9 +99,6 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> listToCsv(String csv, String fileName) async {
-    print("💌💌💌💌💌");
-    print(csv);
-
     String csvFileDirectory =
         '${(await getApplicationDocumentsDirectory()).path}/eeg_data';
 
@@ -125,7 +122,7 @@ class _HomeViewState extends State<HomeView> {
     }
   }
 
-  int calculateVal(List<int> dat, int index, int chNo) {
+  int calculateEegVal(List<int> dat, int index, int chNo) {
     var finalVal = 0;
     try {
       final lsbCount = (chNo * 3) + (index * 12) + 2;
@@ -181,17 +178,7 @@ class _HomeViewState extends State<HomeView> {
     var ch3Val = 0.0;
     var ch4Val = 0.0;
 
-    // 48 bytes -> 250 hz, 96 bytes -> 500 hz
-    // 48 / 12 => 4, 96 / 12 => 8
-    // 8 for 500 HZ, 4 for 250 HZ
-
-    // 16 ms -> 4 data -> per chart
-    // 4 * 4ms -> 1 data -> per chart
-
-    // bytesBreakDown(data.length ~/ 12);
     bytesBreakDown = data.length ~/ 12;
-
-    // printLog(title: 'bytesBreakDown', content: bytesBreakDown());
 
     for (int i = 0; i < bytesBreakDown; i++) {
       eegCounts++;
@@ -199,10 +186,10 @@ class _HomeViewState extends State<HomeView> {
       DateTime now = DateTime.now();
       String formattedDate = DateFormat('HH:mm:ss:SSSSS').format(now);
 
-      ch1Val = gain * calculateVal(data, i, 0);
-      ch2Val = gain * calculateVal(data, i, 1);
-      ch3Val = gain * calculateVal(data, i, 2);
-      ch4Val = gain * calculateVal(data, i, 3);
+      ch1Val = gain * calculateEegVal(data, i, 0);
+      ch2Val = gain * calculateEegVal(data, i, 1);
+      ch3Val = gain * calculateEegVal(data, i, 2);
+      ch4Val = gain * calculateEegVal(data, i, 3);
 
       listCh1.add(ch1Val);
       listCh2.add(ch2Val);
@@ -212,14 +199,16 @@ class _HomeViewState extends State<HomeView> {
     }
   }
 
-  void deviceStatus(int timeInSec, String mode) {
+  void deviceStatus(int timeInSec, String currentMode) {
     setState(() {
-      this.mode = mode;
+      mode = currentMode;
     });
 
     Future.delayed(Duration(seconds: timeInSec), () {
+      print("--------------------------------------Future also printed $mode");
       setState(() {
         mode = 'IDLE';
+        print("--------------------------------------$mode");
       });
     });
   }
@@ -486,69 +475,8 @@ class _HomeViewState extends State<HomeView> {
   }
 
   void discoverServices() async {
-    List<BluetoothService> services = await widget.device.discoverServices();
-    // for (var service in services) {
-    //   // service.serviceUuid
-    //
-    //   print("Service: ${service.serviceUuid} :: UUID :${service.uuid}");
-    //   print("${service.characteristics.length} characteristics");
-    //
-    //   for (int i = 0; i < service.characteristics.length; i++) {
-    //     print("Characteristic ${i + 1}: ${service.characteristics[i].uuid}  "
-    //         "${service.characteristics[i].properties}");
-    //
-    //     for (int j = 0;
-    //         j < service.characteristics[i].descriptors.length;
-    //         j++) {
-    //       print(
-    //           "Descriptor ${j + 1}: ${service.characteristics[i].descriptors[j].uuid}");
-    //     }
-    //   }
-    // }
+    await widget.device.discoverServices();
   }
-
-  // Future onDiscoverServicesPressed() async {
-  //   if (mounted) {
-  //     setState(() {
-  //       _isDiscoveringServices = true;
-  //     });
-  //   }
-  //   try {
-  //     _services = await widget.device.discoverServices();
-  //     Snackbar.show(ABC.c, "Discover Services: Success", success: true);
-  //   } catch (e) {
-  //     Snackbar.show(ABC.c, prettyException("Discover Services Error:", e), success: false);
-  //   }
-  //   if (mounted) {
-  //     setState(() {
-  //       _isDiscoveringServices = false;
-  //     });
-  //   }
-  // }
-  //
-  // // void discoverServices() async {
-  // //   List<BluetoothService> services = widget.bDevice.servicesList;
-  // //   setState(() {
-  // //     this.services = services;
-  // //   });
-  // // }
-  //
-  // // void readCharacteristic(BluetoothCharacteristic characteristic) async {
-  // //   var value = await characteristic.read();
-  // //   print('Characteristic ${characteristic.uuid}: $value');
-  // // }
-  // //
-  // // void writeCharacteristic(
-  // //     BluetoothCharacteristic characteristic, List<int> value) async {
-  // //   await characteristic.write(value);
-  // //   print('Wrote $value to ${characteristic.uuid}');
-  // // }
-  //
-  // @override
-  // void dispose() {
-  //   deviceStateSubscription?.cancel();
-  //   super.dispose();
-  // }
 
   @override
   Widget build(BuildContext context) {
@@ -607,11 +535,11 @@ class _HomeViewState extends State<HomeView> {
                       Container(
                         height: 20,
                         width: 20,
-                        color: mode == 'IDLE'
-                            ? Colors.green
-                            : mode == 'EEG'
-                                ? Colors.purpleAccent
-                                : Colors.blue,
+                        color: mode == 'EEF'
+                            ? Colors.purpleAccent
+                            : mode == 'tDCS'
+                                ? Colors.blue
+                                : Colors.green,
                       )
                     ],
                   ),
