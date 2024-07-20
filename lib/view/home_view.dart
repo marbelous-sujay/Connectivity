@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:connectivity/view/landing_screen.dart';
+import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// SERVICE
 const easeServiceID = 'ff01';
@@ -29,11 +34,9 @@ const uuidDevSett = 'ff07';
 class HomeView extends StatefulWidget {
   const HomeView({
     super.key,
-    // required this.device,
     required this.device,
   });
 
-  // final ScanResult device;
   final BluetoothDevice device;
 
   @override
@@ -52,9 +55,23 @@ class _HomeViewState extends State<HomeView> {
   String eegButtonText = 'Run EEG';
   String tdcsButtonText = 'Run tDCS';
 
+  int bytesBreakDown = 4;
+  double gain = 0.26822;
+  int countEegRead = 0;
+  int incrementMillisecondBy = 2;
+  List<double> listCh1 = [];
+  List<double> listEmpty = [0, 0, 0, 0, 0, 0];
+  List<double> listCh2 = [];
+  List<double> listCh3 = [];
+  List<double> listCh4 = [];
+  List<String> listOfTimeStamps = [];
+  int eegCounts = 0;
+
+  List<List<dynamic>> listTDCSData = [];
+  int tdcsCounts = 0;
+
   late DeviceIdentifier remoteId;
 
-  // late BluetoothDevice selectedDevice;
   BluetoothConnectionState _connectionState =
       BluetoothConnectionState.disconnected;
   late StreamSubscription<BluetoothConnectionState>
@@ -75,41 +92,162 @@ class _HomeViewState extends State<HomeView> {
     remoteId = widget.device.remoteId;
 
     Future.delayed(const Duration(seconds: 5), () {
-      // getDeviceMode();
-
       discoverServices();
       readBatteryData();
       getBatteryInfo();
     });
   }
 
-  readBatteryData() async{
+  Future<void> listToCsv(String csv, String fileName) async {
+    print("💌💌💌💌💌");
+    print(csv);
+
+    String csvFileDirectory =
+        '${(await getApplicationDocumentsDirectory()).path}/eeg_data';
+
+    if (!Directory(csvFileDirectory).existsSync()) {
+      await Directory(csvFileDirectory).create(recursive: true);
+    }
+
+    String path = '$csvFileDirectory/$fileName';
+
+    final File file = File(path);
+
+    try {
+      await file.writeAsString(
+        csv,
+        mode: FileMode.write,
+      );
+      print("CSV_PATH:   $path");
+    } catch (e, stacktrace) {
+      print("Error--------------------------------: $e");
+      print("Stacktrace: $stacktrace");
+    }
+  }
+
+  int calculateVal(List<int> dat, int index, int chNo) {
+    var finalVal = 0;
+    try {
+      final lsbCount = (chNo * 3) + (index * 12) + 2;
+
+      final lsb = dat[lsbCount];
+      final midB = dat[(chNo * 3) + (index * 12) + 1];
+      final msb = dat[(chNo * 3) + (index * 12)];
+      final bool condition = (msb & 0x80) == 128;
+
+      if (condition) {
+        finalVal = (0xffffffffff << 24) | (msb << 16) | (midB << 8) | lsb;
+        finalVal = ~(finalVal - 1);
+        finalVal = -finalVal;
+      } else {
+        finalVal = (msb << 16) | (midB << 8) | lsb;
+      }
+    } catch (error) {
+      // errorHandling(error: error, stacktrace: stacktrace);
+    }
+    return finalVal;
+  }
+
+  int convertListToInt(List<int> data) {
+    if (data.length == 4) {
+      return data[0] | data[1] << 8 | data[2] << 16 | data[3] << 24;
+    } else if (data.length == 2) {
+      return data[0] | data[1] << 8;
+    }
+    return 0;
+  }
+
+  void handelValueChangeTdcs(List<int> data) {
+    final List<int> setCurrentList = data.sublist(0, 2);
+    final List<int> actualCurrentList = data.sublist(2, 6);
+
+    DateTime now = DateTime.now();
+    String formattedDate = DateFormat('HH:mm:ss:SSSSS').format(now);
+
+    final double setCurrentValue = convertListToInt(setCurrentList).toDouble();
+
+    final double actualCurrentValue =
+        convertListToInt(actualCurrentList).toDouble();
+
+    listTDCSData
+        .add([formattedDate, tdcsCounts, setCurrentValue, actualCurrentValue]);
+
+    tdcsCounts += 1;
+  }
+
+  void handleValueChangeEEG(List<int> data) {
+    var ch1Val = 0.0;
+    var ch2Val = 0.0;
+    var ch3Val = 0.0;
+    var ch4Val = 0.0;
+
+    // 48 bytes -> 250 hz, 96 bytes -> 500 hz
+    // 48 / 12 => 4, 96 / 12 => 8
+    // 8 for 500 HZ, 4 for 250 HZ
+
+    // 16 ms -> 4 data -> per chart
+    // 4 * 4ms -> 1 data -> per chart
+
+    // bytesBreakDown(data.length ~/ 12);
+    bytesBreakDown = data.length ~/ 12;
+
+    // printLog(title: 'bytesBreakDown', content: bytesBreakDown());
+
+    for (int i = 0; i < bytesBreakDown; i++) {
+      eegCounts++;
+
+      DateTime now = DateTime.now();
+      String formattedDate = DateFormat('HH:mm:ss:SSSSS').format(now);
+
+      ch1Val = gain * calculateVal(data, i, 0);
+      ch2Val = gain * calculateVal(data, i, 1);
+      ch3Val = gain * calculateVal(data, i, 2);
+      ch4Val = gain * calculateVal(data, i, 3);
+
+      listCh1.add(ch1Val);
+      listCh2.add(ch2Val);
+      listCh3.add(ch3Val);
+      listCh4.add(ch4Val);
+      listOfTimeStamps.add(formattedDate);
+    }
+  }
+
+  void deviceStatus(int timeInSec, String mode) {
+    setState(() {
+      this.mode = mode;
+    });
+
+    Future.delayed(Duration(seconds: timeInSec), () {
+      setState(() {
+        mode = 'IDLE';
+      });
+    });
+  }
+
+  readBatteryData() async {
     BluetoothCharacteristic data =
-    getBluetoothCharacteristics(batteryServiceID, uuidBatteryCustomData);
+        getBluetoothCharacteristics(batteryServiceID, uuidBatteryCustomData);
     try {
       List<int> batData = await readValue(data);
 
-      print("^^^^^^^^^^Init Battery Data: $batData");
-
-      if(batData.isNotEmpty) {
+      if (batData.isNotEmpty) {
         setState(() {
-        if (batData[1] == 10) {
-          chargingStatus = 'Charging';
-        } else {
-          chargingStatus = 'Discharging';
-        }
+          if (batData[1] == 10) {
+            chargingStatus = 'Charging';
+          } else {
+            chargingStatus = 'Discharging';
+          }
 
-        batteryLevel = batData[0].toString();
-      });
+          batteryLevel = batData[0].toString();
+        });
       }
-    } catch(e, stackTrace){
+    } catch (e, stackTrace) {
       print("Error: $e");
       print("Stacktrace: $stackTrace");
     }
   }
 
   startTdcs() {
-
     _connectionStateSubscription =
         widget.device.connectionState.listen((state) {
       _connectionState = state;
@@ -125,6 +263,7 @@ class _HomeViewState extends State<HomeView> {
       data.setNotifyValue(true);
       final subscription = data.onValueReceived.listen((value) {
         print("^^^^^^^^^^TDCS Data: $value");
+        handelValueChangeTdcs(value);
 
         // onValueReceived is updated:
         //   - anytime read() is called
@@ -134,6 +273,8 @@ class _HomeViewState extends State<HomeView> {
       // int tdcsTimeElapsed = 0;
 
       //TODO::::::: to write the data
+      deviceStatus(int.parse(tdcsTimeController.text), 'tDCS');
+
       BluetoothCharacteristic data2 =
           getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
 
@@ -166,20 +307,21 @@ class _HomeViewState extends State<HomeView> {
 
   stopTdcs() {
     BluetoothCharacteristic data =
-    getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
+        getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
 
     writeValue(data, [1]);
   }
 
   stopEeg() {
-
     BluetoothCharacteristic data =
-    getBluetoothCharacteristics(easeServiceID, uuidEegSett);
+        getBluetoothCharacteristics(easeServiceID, uuidEegSett);
 
     writeValue(data, [1]);
   }
 
   startEeg() {
+    eegCounts = 0;
+
     _connectionStateSubscription =
         widget.device.connectionState.listen((state) {
       _connectionState = state;
@@ -196,20 +338,24 @@ class _HomeViewState extends State<HomeView> {
       final subscription = data.onValueReceived.listen((value) {
         print("^^^^^^^^^^New EEG Data: $value");
 
+        handleValueChangeEEG(value);
+
         // onValueReceived is updated:
         //   - anytime read() is called
         //   - anytime a notification arrives (if subscribed)
       });
 
       //TODO:::::::::: TO write the EEG data
+      deviceStatus(int.parse(eegTimeController.text), 'EEG');
       BluetoothCharacteristic data2 =
           getBluetoothCharacteristics(easeServiceID, uuidEegSett);
 
       int eegTime = int.parse(eegTimeController.text);
+      int opCode = eegFrequency == 250 ? 20 : 18;
       writeValue(
         data2,
         [
-          18,
+          opCode,
           (0xff & eegTime),
           (0xff & eegTime >> 8),
           (0xff & eegTime >> 16),
@@ -227,7 +373,7 @@ class _HomeViewState extends State<HomeView> {
     });
   }
 
-  void getBatteryInfo()  {
+  void getBatteryInfo() {
     _connectionStateSubscription =
         widget.device.connectionState.listen((state) async {
       _connectionState = state;
@@ -236,15 +382,13 @@ class _HomeViewState extends State<HomeView> {
       BluetoothCharacteristic data =
           getBluetoothCharacteristics(batteryServiceID, uuidBatteryStatus);
 
-
       data.setNotifyValue(true);
       final subscription = data.onValueReceived.listen((value) {
         print("^^^^^^^^^^New Battery Data: $value");
         setState(() {
-
-          if(value[1] == 10) {
+          if (value[1] == 10) {
             chargingStatus = 'Charging';
-          } else{
+          } else {
             chargingStatus = 'Discharging';
           }
 
@@ -257,38 +401,31 @@ class _HomeViewState extends State<HomeView> {
     });
   }
 
-  getDeviceMode(){
+  getDeviceMode() {
     _connectionStateSubscription =
-        widget.device.connectionState.listen((state){
-          _connectionState = state;
-        });
+        widget.device.connectionState.listen((state) {
+      _connectionState = state;
+    });
 
-    BluetoothCharacteristic data = getBluetoothCharacteristics(easeServiceID, uuidDevSett);
+    BluetoothCharacteristic data =
+        getBluetoothCharacteristics(easeServiceID, uuidDevSett);
 
     // readValue(data);
 
     data.setNotifyValue(true);
-    final subscription = data.onValueReceived.listen((value){
+    final subscription = data.onValueReceived.listen((value) {
       print("^^^^^^^^^^New Device Mode Data: $value");
-      setState(() {
-        // if(value[0] == 0){
-        //   mode = 'IDLE';
-        // } else if(value[0] == 1){
-        //   mode = 'EEG';
-        // } else if(value[0] == 2){
-        //   mode = 'tDCS';
-        // }
-      });
+      setState(() {});
     });
   }
 
   Future<List<int>> readValue(BluetoothCharacteristic characteristic) async {
     // BluetoothCharacteristic data = characteristic;
     print("🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️");
-    print(" ${characteristic.uuid}  ${characteristic.serviceUuid}  ${characteristic.remoteId}");
+    print(
+        " ${characteristic.uuid}  ${characteristic.serviceUuid}  ${characteristic.remoteId}");
 
     try {
-
       List<int> readValue = await characteristic.read(timeout: 60);
       print("************************ The read value is  $readValue");
       return readValue;
@@ -349,8 +486,7 @@ class _HomeViewState extends State<HomeView> {
   }
 
   void discoverServices() async {
-    List<BluetoothService> services =
-    await widget.device.discoverServices();
+    List<BluetoothService> services = await widget.device.discoverServices();
     // for (var service in services) {
     //   // service.serviceUuid
     //
@@ -438,7 +574,8 @@ class _HomeViewState extends State<HomeView> {
                   // const SizedBox(height: 30),
                   Text(
                     'Battery Level : $batteryLevel%',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 30),
                   Row(
@@ -452,8 +589,9 @@ class _HomeViewState extends State<HomeView> {
                       Container(
                         height: 20,
                         width: 20,
-                        color:
-                            mode == 'Charging' ? Colors.green : Colors.orangeAccent,
+                        color: mode == 'Charging'
+                            ? Colors.green
+                            : Colors.orangeAccent,
                       )
                     ],
                   ),
@@ -461,9 +599,9 @@ class _HomeViewState extends State<HomeView> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Mode : EEG/tDCS/IDLE',
-                        style: TextStyle(
+                      Text(
+                        'Mode : $mode',
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       Container(
@@ -472,8 +610,8 @@ class _HomeViewState extends State<HomeView> {
                         color: mode == 'IDLE'
                             ? Colors.green
                             : mode == 'EEG'
-                                ? Colors.yellow
-                                : Colors.red,
+                                ? Colors.purpleAccent
+                                : Colors.blue,
                       )
                     ],
                   ),
@@ -487,8 +625,6 @@ class _HomeViewState extends State<HomeView> {
               ),
 
               const SizedBox(height: 30),
-              const Divider(),
-              const SizedBox(height: 20),
 
               ///Device connection Buttons
               Row(
@@ -496,7 +632,11 @@ class _HomeViewState extends State<HomeView> {
                   Expanded(
                       child: ElevatedButton(
                           onPressed: () {
-                            widget.device.connect();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const LandingScreen(),
+                                ),
+                              );
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
@@ -593,10 +733,12 @@ class _HomeViewState extends State<HomeView> {
                                           eegButtonText = 'Stop EEG';
                                         });
                                         startEeg();
-                                      } else{
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                      } else {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
                                           const SnackBar(
-                                            content: Text('Please enter EEG time first'),
+                                            content: Text(
+                                                'Please enter EEG time first'),
                                           ),
                                         );
                                       }
@@ -708,10 +850,12 @@ class _HomeViewState extends State<HomeView> {
                                           tdcsButtonText = 'Stop tDCS';
                                         });
                                         startTdcs();
-                                      } else{
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                      } else {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
                                           const SnackBar(
-                                            content: Text('Please enter tDCS time first'),
+                                            content: Text(
+                                                'Please enter tDCS time first'),
                                           ),
                                         );
                                       }
@@ -735,15 +879,102 @@ class _HomeViewState extends State<HomeView> {
               const Divider(),
               const SizedBox(height: 20),
 
-              ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.yellow,
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                        onPressed: listCh1.isEmpty
+                            ? () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please run EEG first'),
+                                  ),
+                                );
+                              }
+                            : () {
+                                String eegCsv =
+                                    const ListToCsvConverter().convert(
+                                  [
+                                    [
+                                      'Total EEG data:',
+                                      '$eegCounts',
+                                      'Date',
+                                      (DateFormat('dd-MMMM-yyyy')
+                                          .format(DateTime.now()))
+                                    ],
+                                    ['Time', 'Ch1', 'Ch2', 'Ch3', 'Ch4'],
+                                    ...List.generate(listCh1.length, (index) {
+                                      return [
+                                        listOfTimeStamps[index],
+                                        listCh1[index],
+                                        listCh2[index],
+                                        listCh3[index],
+                                        listCh4[index],
+                                      ];
+                                    }),
+                                  ],
+                                );
+                                String fileName =
+                                    'eeg_data-${eegTimeController.text}-${eegFrequency.toInt()}hz-'
+                                    '${DateTime.now().millisecondsSinceEpoch}.csv';
+
+                                listToCsv(eegCsv, fileName);
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.yellow,
+                        ),
+                        child: const Text(
+                          'Get EEG CSV',
+                          // style: TextStyle(color: Colors.white),
+                        )),
                   ),
-                  child: const Text(
-                    'Generate CSV',
-                    // style: TextStyle(color: Colors.white),
-                  ))
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                        onPressed: listTDCSData.isEmpty
+                            ? () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please run tDCS first'),
+                                  ),
+                                );
+                              }
+                            : () {
+                                String eegCsv =
+                                    const ListToCsvConverter().convert(
+                                  [
+                                    [
+                                      'Total tDCS data:',
+                                      '$tdcsCounts',
+                                      'Date',
+                                      (DateFormat('dd-MMMM-yyyy')
+                                          .format(DateTime.now()))
+                                    ],
+                                    [
+                                      'Index',
+                                      'Time',
+                                      'Set Current',
+                                      'Actual Current'
+                                    ],
+                                    listTDCSData,
+                                  ],
+                                );
+                                String fileName =
+                                    'tdcs_data-${tdcsTimeController.text}-${tdcsCurrent.toInt()}mA-'
+                                    '${DateTime.now().millisecondsSinceEpoch}.csv';
+
+                                listToCsv(eegCsv, fileName);
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.yellow,
+                        ),
+                        child: const Text(
+                          'Get tDCS CSV',
+                          // style: TextStyle(color: Colors.white),
+                        )),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
