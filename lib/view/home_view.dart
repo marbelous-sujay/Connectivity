@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:connectivity/model/error_model.dart';
+import 'package:connectivity/utils/utils.dart';
 import 'package:connectivity/view/landing_screen.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
@@ -28,8 +30,31 @@ const uuidTdcsSett = 'ff03';
 // tDCS read, notify
 const uuidTdcsRead = 'ff02';
 
+// error, notify, read
+const uuidError = 'ff06';
+
 // device status, read, write
 const uuidDevSett = 'ff07';
+
+enum EnumErrorProtocol {
+  noError,
+  invalidError,
+  timeout,
+  eegNotWorking,
+  eegHardwareSysFault,
+  tdcsNotWorking,
+  tdcsOverCurrentTriggered,
+  tdcsOverCurrentSoftTriggered,
+  tdcsElectrodeOpen,
+  fuelGaugeNotWorking,
+  protocolRunningWhileCharging,
+  batteryCriticalLow,
+  accelerometerNotWorking,
+  headbandDisconnected,
+  lowBattery,
+  tdcsEnded,
+  callAssistant,
+}
 
 class HomeView extends StatefulWidget {
   const HomeView({
@@ -75,10 +100,19 @@ class _HomeViewState extends State<HomeView> {
   late BluetoothCharacteristic batteryData;
   late BluetoothCharacteristic eegData;
   late BluetoothCharacteristic tdcsData;
+  late BluetoothCharacteristic errorData;
 
   late final StreamSubscription<List<int>> batteryListener;
   late final StreamSubscription<List<int>> eegListener;
   late final StreamSubscription<List<int>> tdcsListener;
+  late final StreamSubscription<List<int>> errorListener;
+
+  int errorInHeadband = 0;
+  int errorInEEG = 0;
+  int errorInTDCS = 0;
+  int errorInFuelGauge = 0;
+  int errorInAccelerometer = 0;
+
 
   Timer? timer;
   int remainingTime = 0;
@@ -123,6 +157,8 @@ class _HomeViewState extends State<HomeView> {
       batteryData =
       getBluetoothCharacteristics(batteryServiceID, uuidBatteryStatus);
 
+      errorData = getBluetoothCharacteristics(easeServiceID, uuidError);
+
       listenToServices();
       readBatteryData();
     });
@@ -134,6 +170,7 @@ class _HomeViewState extends State<HomeView> {
     batteryListener.cancel();
     eegListener.cancel();
     tdcsListener.cancel();
+    errorListener.cancel();
     super.dispose();
   }
 
@@ -242,13 +279,13 @@ class _HomeViewState extends State<HomeView> {
 
     widget.device.connectionState.listen((state) {
 
-      // if(state== BluetoothConnectionState.disconnected){
-      //   Navigator.of(context).push(
-      //     MaterialPageRoute(
-      //       builder: (context) => const LandingScreen(),
-      //     ),
-      //   );
-      // }  else {
+      if(state== BluetoothConnectionState.disconnected){
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const LandingScreen(),
+          ),
+        );
+      }  else {
 
         ///TDCS listener
         tdcsData.setNotifyValue(true);
@@ -280,10 +317,17 @@ class _HomeViewState extends State<HomeView> {
             batteryLevel = value[0].toString();
           });
         });
-      // }
 
+
+        ///Error listener
+        errorData.setNotifyValue(true);
+        errorListener = errorData.onValueReceived.listen((value){
+          // print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@$value");
+          handleValueChangeError(value);
+          print("Error: $value");
+        });
+      }
     });
-
   }
 
   void deviceStatus(int timeInSec, String currentMode) {
@@ -298,6 +342,8 @@ class _HomeViewState extends State<HomeView> {
         tdcsButtonText = 'Run tDCS';
       }
     });
+
+    timeInSec = currentMode == 'EEG' ? timeInSec : timeInSec + 60;
 
     Future.delayed(Duration(seconds: timeInSec), () {
       print("--------------------------------------Future also printed $mode");
@@ -336,7 +382,7 @@ class _HomeViewState extends State<HomeView> {
   startTdcs() {
     eegCounts=0;
 
-    startTimer(tdcsTimeController.text);
+    startTimer((int.parse(tdcsTimeController.text)+60).toString());
 
       deviceStatus(int.parse(tdcsTimeController.text), 'tDCS');
 
@@ -354,10 +400,10 @@ class _HomeViewState extends State<HomeView> {
         ((30000 >> 8) & 0xff),
         ((30000 >> 16) & 0xff),
         ((30000 >> 24) & 0xff),
-        (0xff & (tdcsTime - 60)),
-        (0xff & ((tdcsTime - 60) >> 8)),
-        (0xff & ((tdcsTime - 60) >> 16)),
-        (0xff & ((tdcsTime - 60) >> 24)),
+        (0xff & (tdcsTime)),
+        (0xff & ((tdcsTime) >> 8)),
+        (0xff & ((tdcsTime) >> 16)),
+        (0xff & ((tdcsTime) >> 24)),
       ]);
   }
 
@@ -477,6 +523,206 @@ class _HomeViewState extends State<HomeView> {
 
   void discoverServices() async {
     await widget.device.discoverServices();
+  }
+
+  ErrorData getErrorDataFromErrorCode(int errorCode) {
+    switch (errorCode) {
+      case 0:
+        return ErrorData(
+          error: EnumErrorProtocol.noError.name,
+          title: 'NO ERROR',
+          message: 'There is no error in headband',
+        );
+
+      case 1:
+        return ErrorData(
+          error: EnumErrorProtocol.timeout.name,
+          title: 'TIMEOUT',
+          message: 'Timeout error',
+        );
+
+      case 100:
+        return ErrorData(
+          error: EnumErrorProtocol.eegNotWorking.name,
+          title: 'EEG NOT WORKING',
+          message: 'EEG not working',
+        );
+
+      case 101:
+        return ErrorData(
+          error: EnumErrorProtocol.noError.name,
+          title: 'EEG HARDWARE SYS FAULT',
+          message: 'EEG Hardware system fault',
+        );
+
+      case 110:
+        return ErrorData(
+          error: EnumErrorProtocol.tdcsNotWorking.name,
+          title: 'TDCS NOT WORKING',
+          message: 'TDCS not working',
+        );
+
+      case 111:
+        return ErrorData(
+          error: EnumErrorProtocol.tdcsOverCurrentTriggered.name,
+          title: 'TDCS OVERCURRNT TRIGGED',
+          message: 'TDCS over current triggered',
+        );
+
+      case 112:
+        return ErrorData(
+          error: EnumErrorProtocol.tdcsOverCurrentSoftTriggered.name,
+          title: 'TDS OVERCURRENT SOFT TRIGGERD',
+          message: 'TDCS over current soft triggered',
+        );
+
+      case 113:
+        return ErrorData(
+          error: EnumErrorProtocol.tdcsElectrodeOpen.name,
+          title: 'TDCS_ELECTRODE_OPEN',
+          message: 'TDCS electrode open',
+        );
+
+      case 120:
+        return ErrorData(
+          error: EnumErrorProtocol.fuelGaugeNotWorking.name,
+          title: 'FUEL_GAUGE_NOT_WORKING',
+          message: 'Fuel gauge not working',
+        );
+
+      case 121:
+        return ErrorData(
+          error: EnumErrorProtocol.protocolRunningWhileCharging.name,
+          title: 'PROTOCOL_RUNNING_WHILE_CHARGING',
+          message: 'Protocol running while charging',
+        );
+
+      case 122:
+        return ErrorData(
+          error: EnumErrorProtocol.batteryCriticalLow.name,
+          title: 'BATTERY_CRITICAL_LOW',
+          message: 'Batter is critically low',
+        );
+
+      case 130:
+        return ErrorData(
+          error: EnumErrorProtocol.accelerometerNotWorking.name,
+          title: 'ACCELEROMETER_NOT_WORKING',
+          message: 'Accelerometer not working',
+        );
+
+      default:
+        return ErrorData(
+          error: EnumErrorProtocol.invalidError.name,
+          title: 'INVALID ERROR',
+          message: 'Invalid error code',
+        );
+    }
+  }
+
+
+  Future<void> handleValueChangeError(List<int> data) async {
+    bool isError = false;
+
+    ErrorData errorData = getErrorDataFromErrorCode(
+      errorInEEG,
+    );
+
+    if (data.length == 4) {
+      String? errorMessage;
+      errorInFuelGauge = data[0];
+      errorInEEG = data[1];
+      errorInTDCS = data[2];
+      errorInAccelerometer = data[3];
+
+      print(
+        "title: 'errorEeg' content: ${errorInEEG}",
+      );
+      print(
+        "title: 'errorTDCS' content: ${errorInTDCS}",
+      );
+      print(
+        "title: 'errorFuelGauge' content: ${errorInFuelGauge}",
+      );
+      print(
+        "title: 'errorAccelerometer' content: ${errorInAccelerometer}",
+      );
+
+
+      if (mode != 'IDLE') {
+        if (errorInEEG != 0) {
+          isError = true;
+          errorData = getErrorDataFromErrorCode(
+            errorInEEG,
+          );
+
+          errorMessage =
+          '[${errorInEEG}] ${errorData.error}\n';
+        }
+
+        if (errorInTDCS != 0) {
+          isError = true;
+          errorData = getErrorDataFromErrorCode(
+            errorInTDCS,
+          );
+
+          errorMessage =
+          '${errorMessage?.trim()} [${errorInTDCS}] ${errorData.error}\n';
+        }
+
+        if (errorInFuelGauge != 0) {
+          isError = true;
+          errorData = getErrorDataFromErrorCode(
+            errorInFuelGauge,
+          );
+
+          errorMessage =
+          '${errorMessage?.trim()} [${errorInFuelGauge}] ${errorData.error}\n';
+        }
+
+        if (errorInAccelerometer != 0) {
+          isError = true;
+          errorData = getErrorDataFromErrorCode(
+            errorInAccelerometer,
+          );
+
+          errorMessage =
+          '${errorMessage?.trim()} [${errorInAccelerometer}] ${errorData.error}\n';
+        }
+
+        if (isError) {
+          // mqttController.sendError(
+          //   error: errorMessage,
+          //   errorProtocol: stringToEnumErrorProtocol(
+          //     errorData.error,
+          //   ),
+          //   title: errorData.title,
+          //   message: errorData.message,
+          // );
+        }
+      }
+    } else {
+      errorInHeadband = data[0];
+
+      print(
+        "title: 'errorInHeadband' content: ${getErrorDataFromErrorCode(errorInHeadband)}",
+      );
+
+      print(
+        "title: 'errorInHeadband' content: ${getErrorDataFromErrorCode(errorInHeadband)}",
+      );
+
+      if (errorInHeadband != 0) {
+        final errorData = getErrorDataFromErrorCode(
+          errorInHeadband,
+        );
+        showAlertDialog(
+          context,
+          errorData.title,
+          errorData.message,
+        );
+      }
+    }
   }
 
   @override
