@@ -33,7 +33,6 @@ class _ScanScreenState extends State<ScanScreen> {
       _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
         for (int i = 0; i < results.length; i++) {
           if (results[i].device.advName == "EASE") {
-
             results[i].device.connect();
             FlutterBluePlus.stopScan();
 
@@ -67,7 +66,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future onScanPressed() async {
     try {
-      await FlutterBluePlus.systemDevices;
+      FlutterBluePlus.systemDevices;
     } catch (e) {
       Snackbar.show(ABC.b, prettyException("System Devices Error:", e),
           success: false);
@@ -87,21 +86,23 @@ class _ScanScreenState extends State<ScanScreen> {
     if (await Permission.location.request().isGranted) {
       locationPermissionGranted = true;
     } else if (await Permission.location.request().isPermanentlyDenied) {
-      throw('location.request().isPermanentlyDenied');
+      throw ('location.request().isPermanentlyDenied');
     } else if (await Permission.location.request().isDenied) {
-      throw('location.request().isDenied');
-    }
-  }
-  Future getNearbyPermission() async {
-    if (await Permission.nearbyWifiDevices.request().isGranted) {
-      nearbyPermissionGranted = true;
-    } else if (await Permission.nearbyWifiDevices.request().isPermanentlyDenied) {
-      throw('location.request().isPermanentlyDenied');
-    } else if (await Permission.nearbyWifiDevices.request().isDenied) {
-      throw('location.request().isDenied');
+      throw ('location.request().isDenied');
     }
   }
 
+  Future getNearbyPermission() async {
+    if (await Permission.nearbyWifiDevices.request().isGranted) {
+      nearbyPermissionGranted = true;
+    } else if (await Permission.nearbyWifiDevices
+        .request()
+        .isPermanentlyDenied) {
+      throw ('location.request().isPermanentlyDenied');
+    } else if (await Permission.nearbyWifiDevices.request().isDenied) {
+      throw ('location.request().isDenied');
+    }
+  }
 
   Future onStopPressed() async {
     try {
@@ -119,7 +120,7 @@ class _ScanScreenState extends State<ScanScreen> {
     if (mounted) {
       setState(() {});
     }
-    return Future.delayed(Duration(milliseconds: 500));
+    return Future.delayed(const Duration(milliseconds: 500));
   }
 
   Widget buildScanButton(BuildContext context) {

@@ -1,11 +1,8 @@
-import 'dart:async';
-
 import 'package:connectivity/view/home_view.dart';
 import 'package:connectivity/view/landing_screen.dart';
 import 'package:connectivity/view/scan_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-
 
 void main() {
   FlutterBluePlus.setLogLevel(LogLevel.verbose, color: true);
@@ -22,16 +19,16 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-          sliderTheme: const SliderThemeData(
-            showValueIndicator: ShowValueIndicator.always,
-          ),
+        sliderTheme: const SliderThemeData(
+          showValueIndicator: ShowValueIndicator.always,
+        ),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
       home: const
-      //HomeView(),
-      // ScanScreen2(),
-      LandingScreen(),
+          //HomeView(),
+          // ScanScreen2(),
+          LandingScreen(),
       //SplashView(),
       //const MyHomePage(title: 'Flutter Demo Home Page'),
     );

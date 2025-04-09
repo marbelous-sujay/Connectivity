@@ -4,6 +4,7 @@ import 'package:connectivity/model/error_model.dart';
 import 'package:connectivity/utils/utils.dart';
 import 'package:connectivity/view/landing_screen.dart';
 import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -113,7 +114,6 @@ class _HomeViewState extends State<HomeView> {
   int errorInFuelGauge = 0;
   int errorInAccelerometer = 0;
 
-
   Timer? timer;
   int remainingTime = 0;
 
@@ -150,12 +150,10 @@ class _HomeViewState extends State<HomeView> {
     Future.delayed(const Duration(seconds: 5), () {
       discoverServices();
 
-      tdcsData =
-          getBluetoothCharacteristics(easeServiceID, uuidTdcsRead);
-      eegData =
-          getBluetoothCharacteristics(easeServiceID, uuidEegRead);
+      tdcsData = getBluetoothCharacteristics(easeServiceID, uuidTdcsRead);
+      eegData = getBluetoothCharacteristics(easeServiceID, uuidEegRead);
       batteryData =
-      getBluetoothCharacteristics(batteryServiceID, uuidBatteryStatus);
+          getBluetoothCharacteristics(batteryServiceID, uuidBatteryStatus);
 
       errorData = getBluetoothCharacteristics(easeServiceID, uuidError);
 
@@ -191,10 +189,14 @@ class _HomeViewState extends State<HomeView> {
         csv,
         mode: FileMode.write,
       );
-      print("CSV_PATH:   $path");
+      if (kDebugMode) {
+        print("CSV_PATH:   $path");
+      }
     } catch (e, stacktrace) {
-      print("Error--------------------------------: $e");
-      print("Stacktrace: $stacktrace");
+      if (kDebugMode) {
+        print("Error--------------------------------: $e");
+        print("Stacktrace: $stacktrace");
+      }
     }
   }
 
@@ -276,17 +278,14 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> listenToServices() async {
-
     widget.device.connectionState.listen((state) {
-
-      if(state== BluetoothConnectionState.disconnected){
+      if (state == BluetoothConnectionState.disconnected) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const LandingScreen(),
           ),
         );
-      }  else {
-
+      } else {
         ///TDCS listener
         tdcsData.setNotifyValue(true);
         tdcsListener = tdcsData.onValueReceived.listen((value) {
@@ -294,14 +293,12 @@ class _HomeViewState extends State<HomeView> {
           handelValueChangeTdcs(value);
         });
 
-
         ///EEG listener
         eegData.setNotifyValue(true);
         eegListener = eegData.onValueReceived.listen((value) {
           // print("^^^^^^^^^^New EEG Data: $value");
           handleValueChangeEEG(value);
         });
-
 
         ///Battery listener
         batteryData.setNotifyValue(true);
@@ -318,13 +315,14 @@ class _HomeViewState extends State<HomeView> {
           });
         });
 
-
         ///Error listener
         errorData.setNotifyValue(true);
-        errorListener = errorData.onValueReceived.listen((value){
+        errorListener = errorData.onValueReceived.listen((value) {
           // print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@$value");
           handleValueChangeError(value);
-          print("Error: $value");
+          if (kDebugMode) {
+            print("Error: $value");
+          }
         });
       }
     });
@@ -333,11 +331,11 @@ class _HomeViewState extends State<HomeView> {
   void deviceStatus(int timeInSec, String currentMode) {
     setState(() {
       mode = currentMode;
-      if(mode=='EEG'){
+      if (mode == 'EEG') {
         eegButtonText = 'Stop EEG';
-      } else if(mode == 'tDCS'){
+      } else if (mode == 'tDCS') {
         tdcsButtonText = 'Stop tDCS';
-      } else{
+      } else {
         eegButtonText = 'Run EEG';
         tdcsButtonText = 'Run tDCS';
       }
@@ -346,12 +344,17 @@ class _HomeViewState extends State<HomeView> {
     timeInSec = currentMode == 'EEG' ? timeInSec : timeInSec + 60;
 
     Future.delayed(Duration(seconds: timeInSec), () {
-      print("--------------------------------------Future also printed $mode");
+      if (kDebugMode) {
+        print(
+            "--------------------------------------Future also printed $mode");
+      }
       setState(() {
         mode = 'IDLE';
         eegButtonText = 'Run EEG';
         tdcsButtonText = 'Run tDCS';
-        print("--------------------------------------$mode");
+        if (kDebugMode) {
+          print("--------------------------------------$mode");
+        }
       });
     });
   }
@@ -374,44 +377,46 @@ class _HomeViewState extends State<HomeView> {
         });
       }
     } catch (e, stackTrace) {
-      print("Error: $e");
-      print("Stacktrace: $stackTrace");
+      if (kDebugMode) {
+        print("Error: $e");
+        print("Stacktrace: $stackTrace");
+      }
     }
   }
 
   startTdcs() {
-    eegCounts=0;
+    eegCounts = 0;
 
-    startTimer((int.parse(tdcsTimeController.text)+60).toString());
+    startTimer((int.parse(tdcsTimeController.text) + 60).toString());
 
-      deviceStatus(int.parse(tdcsTimeController.text), 'tDCS');
+    deviceStatus(int.parse(tdcsTimeController.text), 'tDCS');
 
-      BluetoothCharacteristic data2 =
-          getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
+    BluetoothCharacteristic data2 =
+        getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
 
-      int tdcsTime = int.parse(tdcsTimeController.text);
-      int tdcsCurrentInt = (tdcsCurrent * 1000).toInt();
+    int tdcsTime = int.parse(tdcsTimeController.text);
+    int tdcsCurrentInt = (tdcsCurrent * 1000).toInt();
 
-      writeValue(data2, [
-        4,
-        (tdcsCurrentInt & 0xff),
-        (tdcsCurrentInt >> 8 & 0xff),
-        (30000 & 0xff),
-        ((30000 >> 8) & 0xff),
-        ((30000 >> 16) & 0xff),
-        ((30000 >> 24) & 0xff),
-        (0xff & (tdcsTime)),
-        (0xff & ((tdcsTime) >> 8)),
-        (0xff & ((tdcsTime) >> 16)),
-        (0xff & ((tdcsTime) >> 24)),
-      ]);
+    writeValue(data2, [
+      4,
+      (tdcsCurrentInt & 0xff),
+      (tdcsCurrentInt >> 8 & 0xff),
+      (30000 & 0xff),
+      ((30000 >> 8) & 0xff),
+      ((30000 >> 16) & 0xff),
+      ((30000 >> 24) & 0xff),
+      (0xff & (tdcsTime)),
+      (0xff & ((tdcsTime) >> 8)),
+      (0xff & ((tdcsTime) >> 16)),
+      (0xff & ((tdcsTime) >> 24)),
+    ]);
   }
 
   stopTdcs() {
-    remainingTime =0;
+    remainingTime = 0;
 
     setState(() {
-      mode='IDLE';
+      mode = 'IDLE';
     });
 
     BluetoothCharacteristic data =
@@ -424,7 +429,7 @@ class _HomeViewState extends State<HomeView> {
     remainingTime = 0;
 
     setState(() {
-      mode='IDLE';
+      mode = 'IDLE';
     });
 
     BluetoothCharacteristic data =
@@ -438,52 +443,65 @@ class _HomeViewState extends State<HomeView> {
 
     startTimer(eegTimeController.text);
 
-      deviceStatus(int.parse(eegTimeController.text), 'EEG');
-      BluetoothCharacteristic data2 =
-          getBluetoothCharacteristics(easeServiceID, uuidEegSett);
+    deviceStatus(int.parse(eegTimeController.text), 'EEG');
+    BluetoothCharacteristic data2 =
+        getBluetoothCharacteristics(easeServiceID, uuidEegSett);
 
-      int eegTime = int.parse(eegTimeController.text);
-      int opCode = eegFrequency == 250 ? 20 : 18;
-      writeValue(
-        data2,
-        [
-          opCode,
-          (0xff & eegTime),
-          (0xff & eegTime >> 8),
-          (0xff & eegTime >> 16),
-          (0xff & eegTime >> 24)
-        ],
-      );
+    int eegTime = int.parse(eegTimeController.text);
+    int opCode = eegFrequency == 250 ? 20 : 18;
+    writeValue(
+      data2,
+      [
+        opCode,
+        (0xff & eegTime),
+        (0xff & eegTime >> 8),
+        (0xff & eegTime >> 16),
+        (0xff & eegTime >> 24)
+      ],
+    );
   }
 
   Future<List<int>> readValue(BluetoothCharacteristic characteristic) async {
     // BluetoothCharacteristic data = characteristic;
-    print("🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️");
-    print(
-        " ${characteristic.uuid}  ${characteristic.serviceUuid}  ${characteristic.remoteId}");
+    if (kDebugMode) {
+      print("🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️🤷‍♂️");
+      print(
+          " ${characteristic.uuid}  ${characteristic.serviceUuid}  ${characteristic.remoteId}");
+    }
 
     try {
       List<int> readValue = await characteristic.read(timeout: 60);
-      print("************************ The read value is  $readValue");
+      if (kDebugMode) {
+        print("************************ The read value is  $readValue");
+      }
       return readValue;
     } catch (error, stacktrace) {
-      print("Error: $error");
-      print("Stacktrace: $stacktrace");
+      if (kDebugMode) {
+        print("Error: $error");
+        print("Stacktrace: $stacktrace");
+      }
     }
 
     return [];
   }
 
-  Future<void> writeValue(BluetoothCharacteristic characteristic, List<int> writeValue) async {
+  Future<void> writeValue(
+      BluetoothCharacteristic characteristic, List<int> writeValue) async {
     BluetoothCharacteristic data = characteristic;
 
-    print("************************ The write value is  $writeValue");
+    if (kDebugMode) {
+      print("************************ The write value is  $writeValue");
+    }
     try {
       await data.write(writeValue);
-      print("************************ Write done");
+      if (kDebugMode) {
+        print("************************ Write done");
+      }
     } catch (error, stacktrace) {
-      print("Error: $error");
-      print("Stacktrace: $stacktrace");
+      if (kDebugMode) {
+        print("Error: $error");
+        print("Stacktrace: $stacktrace");
+      }
     }
   }
 
@@ -492,16 +510,22 @@ class _HomeViewState extends State<HomeView> {
 
     try {
       bool notifyValue = await data.setNotifyValue(true);
-      print("************************ The read value is  $notifyValue");
+      if (kDebugMode) {
+        print("************************ The read value is  $notifyValue");
+      }
     } catch (error, stacktrace) {
-      print("Error: $error");
-      print("Stacktrace: $stacktrace");
+      if (kDebugMode) {
+        print("Error: $error");
+        print("Stacktrace: $stacktrace");
+      }
     }
   }
 
   void notifyCase(BluetoothCharacteristic characteristic) {
     characteristic.onValueReceived.listen((value) {
-      print("Value: $value");
+      if (kDebugMode) {
+        print("Value: $value");
+      }
     });
   }
 
@@ -620,7 +644,6 @@ class _HomeViewState extends State<HomeView> {
     }
   }
 
-
   Future<void> handleValueChangeError(List<int> data) async {
     bool isError = false;
 
@@ -635,19 +658,20 @@ class _HomeViewState extends State<HomeView> {
       errorInTDCS = data[2];
       errorInAccelerometer = data[3];
 
-      print(
-        "title: 'errorEeg' content: ${errorInEEG}",
-      );
-      print(
-        "title: 'errorTDCS' content: ${errorInTDCS}",
-      );
-      print(
-        "title: 'errorFuelGauge' content: ${errorInFuelGauge}",
-      );
-      print(
-        "title: 'errorAccelerometer' content: ${errorInAccelerometer}",
-      );
-
+      if (kDebugMode) {
+        print(
+          "title: 'errorEeg' content: $errorInEEG",
+        );
+        print(
+          "title: 'errorTDCS' content: $errorInTDCS",
+        );
+        print(
+          "title: 'errorFuelGauge' content: $errorInFuelGauge",
+        );
+        print(
+          "title: 'errorAccelerometer' content: $errorInAccelerometer",
+        );
+      }
 
       if (mode != 'IDLE') {
         if (errorInEEG != 0) {
@@ -656,8 +680,7 @@ class _HomeViewState extends State<HomeView> {
             errorInEEG,
           );
 
-          errorMessage =
-          '[${errorInEEG}] ${errorData.error}\n';
+          errorMessage = '[$errorInEEG] ${errorData.error}\n';
         }
 
         if (errorInTDCS != 0) {
@@ -667,7 +690,7 @@ class _HomeViewState extends State<HomeView> {
           );
 
           errorMessage =
-          '${errorMessage?.trim()} [${errorInTDCS}] ${errorData.error}\n';
+              '${errorMessage?.trim()} [$errorInTDCS] ${errorData.error}\n';
         }
 
         if (errorInFuelGauge != 0) {
@@ -677,7 +700,7 @@ class _HomeViewState extends State<HomeView> {
           );
 
           errorMessage =
-          '${errorMessage?.trim()} [${errorInFuelGauge}] ${errorData.error}\n';
+              '${errorMessage?.trim()} [$errorInFuelGauge] ${errorData.error}\n';
         }
 
         if (errorInAccelerometer != 0) {
@@ -687,7 +710,7 @@ class _HomeViewState extends State<HomeView> {
           );
 
           errorMessage =
-          '${errorMessage?.trim()} [${errorInAccelerometer}] ${errorData.error}\n';
+              '${errorMessage?.trim()} [$errorInAccelerometer] ${errorData.error}\n';
         }
 
         if (isError) {
@@ -704,13 +727,15 @@ class _HomeViewState extends State<HomeView> {
     } else {
       errorInHeadband = data[0];
 
-      print(
-        "title: 'errorInHeadband' content: ${getErrorDataFromErrorCode(errorInHeadband)}",
-      );
+      if (kDebugMode) {
+        print(
+          "title: 'errorInHeadband' content: ${getErrorDataFromErrorCode(errorInHeadband)}",
+        );
 
-      print(
-        "title: 'errorInHeadband' content: ${getErrorDataFromErrorCode(errorInHeadband)}",
-      );
+        print(
+          "title: 'errorInHeadband' content: ${getErrorDataFromErrorCode(errorInHeadband)}",
+        );
+      }
 
       if (errorInHeadband != 0) {
         final errorData = getErrorDataFromErrorCode(
@@ -742,430 +767,467 @@ class _HomeViewState extends State<HomeView> {
             widget.device.disconnect();
             Navigator.of(context).pop();
           },
-
         ),
         backgroundColor: Colors.lightGreen,
       ),
       body: Center(
           child: batteryLevel.isEmpty
-              ? const CircularProgressIndicator(color: Colors.green,)
+              ? const CircularProgressIndicator(
+                  color: Colors.green,
+                )
               : Padding(
-        padding: const EdgeInsets.all(25.0),
-        child: SingleChildScrollView(
-          child: Column(
-            children: <Widget>[
-              ///Device Details
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // const SizedBox(height: 30),
-                  Text(
-                    'Battery Level : $batteryLevel%',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 30),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Battery Status : $chargingStatus',
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      Container(
-                        height: 20,
-                        width: 20,
-                        color: mode == 'Charging'
-                            ? Colors.green
-                            : Colors.orangeAccent,
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Mode : $mode',
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      Container(
-                        height: 20,
-                        width: 20,
-                        color: mode == 'EEG'
-                            ? Colors.purpleAccent
-                            : mode == 'tDCS'
-                                ? Colors.blue
-                                : Colors.green,
-                      )
-                    ],
-                  ),
-
-                  const SizedBox(height: 30),
-                   Text(
-                    'Time : $minutes:${seconds.toString().padLeft(2, '0')}',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 30),
-
-              ///Device connection Buttons
-              Row(
-                children: [
-                  Expanded(
-                      child: ElevatedButton(
-                          onPressed: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => const LandingScreen(),
+                  padding: const EdgeInsets.all(25.0),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: <Widget>[
+                        ///Device Details
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // const SizedBox(height: 30),
+                            Text(
+                              'Battery Level : $batteryLevel%',
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 30),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Battery Status : $chargingStatus',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
                                 ),
-                              );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                          ),
-                          child: const Text(
-                            'Connect',
-                            style: TextStyle(color: Colors.white),
-                          ))),
-                  const SizedBox(width: 10),
-                  Expanded(
-                      child: ElevatedButton(
-                          onPressed: () {
-                            //cancel immediately
-                            widget.device.disconnect(queue: false);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orangeAccent,
-                          ),
-                          child: const Text(
-                            'Disconnect',
-                            style: TextStyle(color: Colors.white),
-                          ))),
-                ],
-              ),
+                                Container(
+                                  height: 20,
+                                  width: 20,
+                                  color: mode == 'Charging'
+                                      ? Colors.green
+                                      : Colors.orangeAccent,
+                                )
+                              ],
+                            ),
+                            const SizedBox(height: 30),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Mode : $mode',
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                Container(
+                                  height: 20,
+                                  width: 20,
+                                  color: mode == 'EEG'
+                                      ? Colors.purpleAccent
+                                      : mode == 'tDCS'
+                                          ? Colors.blue
+                                          : Colors.green,
+                                )
+                              ],
+                            ),
 
-              const SizedBox(height: 30),
-              const Divider(),
-              const SizedBox(height: 20),
-
-              ///EEG controls
-              Column(
-                children: [
-                  Slider(
-                      value: eegFrequency.toDouble(),
-                      min: 250,
-                      max: 500,
-                      divisions: 1,
-                      activeColor: Colors.green,
-                      label: '${eegFrequency.round().toString()} Hz',
-                      onChanged: (value) {
-                        setState(() {
-                          eegFrequency = value;
-                        });
-                      }),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: <Widget>[
-                        Text(
-                          '250 Hz',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
+                            const SizedBox(height: 30),
+                            Text(
+                              'Time : $minutes:${seconds.toString().padLeft(2, '0')}',
+                              style: const TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '500 Hz',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
+
+                        const SizedBox(height: 30),
+
+                        ///Device connection Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                                child: ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const LandingScreen(),
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                    ),
+                                    child: const Text(
+                                      'Connect',
+                                      style: TextStyle(color: Colors.white),
+                                    ))),
+                            const SizedBox(width: 10),
+                            Expanded(
+                                child: ElevatedButton(
+                                    onPressed: () {
+                                      //cancel immediately
+                                      widget.device.disconnect(queue: false);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orangeAccent,
+                                    ),
+                                    child: const Text(
+                                      'Disconnect',
+                                      style: TextStyle(color: Colors.white),
+                                    ))),
+                          ],
+                        ),
+
+                        const SizedBox(height: 30),
+                        const Divider(),
+                        const SizedBox(height: 20),
+
+                        ///EEG controls
+                        Column(
+                          children: [
+                            Slider(
+                                value: eegFrequency.toDouble(),
+                                min: 250,
+                                max: 500,
+                                divisions: 1,
+                                activeColor: Colors.green,
+                                label: '${eegFrequency.round().toString()} Hz',
+                                onChanged: (value) {
+                                  setState(() {
+                                    eegFrequency = value;
+                                  });
+                                }),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10.0),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: <Widget>[
+                                  Text(
+                                    '250 Hz',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '500 Hz',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: eegTimeController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly
+                                    ],
+                                    decoration: const InputDecoration(
+                                      hintText: 'Enter time in sec',
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.all(
+                                              Radius.circular(10.0)),
+                                          borderSide:
+                                              BorderSide(color: Colors.green)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                    child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              eegButtonText == 'Run EEG'
+                                                  ? Colors.purpleAccent
+                                                  : Colors.deepOrange,
+                                        ),
+                                        onPressed: eegButtonText == 'Run EEG'
+                                            ? () {
+                                                if (eegTimeController
+                                                    .text.isNotEmpty) {
+                                                  setState(() {
+                                                    eegButtonText = 'Stop EEG';
+                                                  });
+                                                  startEeg();
+                                                } else {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                          'Please enter EEG time first'),
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            : () {
+                                                stopEeg();
+
+                                                setState(() {
+                                                  eegButtonText = 'Run EEG';
+                                                });
+                                              },
+                                        child: Text(
+                                          eegButtonText,
+                                          style: const TextStyle(
+                                              color: Colors.white),
+                                        ))),
+                              ],
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+                        const Divider(),
+                        const SizedBox(height: 20),
+
+                        ///tDCS controls
+                        Column(
+                          children: [
+                            Slider(
+                                value: tdcsCurrent.toDouble(),
+                                min: 0.5,
+                                max: 3,
+                                divisions: 5,
+                                activeColor: Colors.blue,
+                                label: '${tdcsCurrent.toStringAsFixed(1)} mA',
+                                onChanged: (value) {
+                                  setState(() {
+                                    tdcsCurrent = value;
+                                  });
+                                }),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10.0),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: <Widget>[
+                                  Text(
+                                    '0.5 mA',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '1.0 mA',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '1.5 mA',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '2.0 mA',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '2.5 mA',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '3.0 mA',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: tdcsTimeController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly
+                                    ],
+                                    decoration: const InputDecoration(
+                                      hintText: 'Enter time in sec',
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.all(
+                                              Radius.circular(10.0)),
+                                          borderSide:
+                                              BorderSide(color: Colors.green)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                    child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              tdcsButtonText == 'Run tDCS'
+                                                  ? Colors.blue
+                                                  : Colors.deepOrange,
+                                        ),
+                                        onPressed: tdcsButtonText == 'Run tDCS'
+                                            ? () {
+                                                if (tdcsTimeController
+                                                    .text.isNotEmpty) {
+                                                  setState(() {
+                                                    tdcsButtonText =
+                                                        'Stop tDCS';
+                                                  });
+                                                  startTdcs();
+                                                } else {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                          'Please enter tDCS time first'),
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            : () {
+                                                stopTdcs();
+                                                setState(() {
+                                                  tdcsButtonText = 'Run tDCS';
+                                                });
+                                              },
+                                        child: Text(
+                                          tdcsButtonText,
+                                          style: const TextStyle(
+                                              color: Colors.white),
+                                        ))),
+                              ],
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+                        const Divider(),
+                        const SizedBox(height: 20),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                  onPressed: listCh1.isEmpty
+                                      ? () {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content:
+                                                  Text('Please run EEG first'),
+                                            ),
+                                          );
+                                        }
+                                      : () {
+                                          String eegCsv =
+                                              const ListToCsvConverter()
+                                                  .convert(
+                                            [
+                                              [
+                                                'Total EEG data:',
+                                                '$eegCounts',
+                                                'Date',
+                                                (DateFormat('dd-MMMM-yyyy')
+                                                    .format(DateTime.now()))
+                                              ],
+                                              [
+                                                'Time',
+                                                'Ch1',
+                                                'Ch2',
+                                                'Ch3',
+                                                'Ch4'
+                                              ],
+                                              ...List.generate(listCh1.length,
+                                                  (index) {
+                                                return [
+                                                  listOfTimeStamps[index],
+                                                  listCh1[index],
+                                                  listCh2[index],
+                                                  listCh3[index],
+                                                  listCh4[index],
+                                                ];
+                                              }),
+                                            ],
+                                          );
+                                          String fileName =
+                                              'eeg_data-${eegTimeController.text}-${eegFrequency.toInt()}hz-'
+                                              '${DateTime.now().millisecondsSinceEpoch}.csv';
+
+                                          listToCsv(eegCsv, fileName);
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.yellow,
+                                  ),
+                                  child: const Text(
+                                    'Get EEG CSV',
+                                    // style: TextStyle(color: Colors.white),
+                                  )),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                  onPressed: listTDCSData.isEmpty
+                                      ? () {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content:
+                                                  Text('Please run tDCS first'),
+                                            ),
+                                          );
+                                        }
+                                      : () {
+                                          String eegCsv =
+                                              const ListToCsvConverter()
+                                                  .convert(
+                                            [
+                                              [
+                                                'Total tDCS data:',
+                                                '$tdcsCounts',
+                                                'Date',
+                                                (DateFormat('dd-MMMM-yyyy')
+                                                    .format(DateTime.now()))
+                                              ],
+                                              [
+                                                'Index',
+                                                'Time',
+                                                'Set Current',
+                                                'Actual Current'
+                                              ],
+                                              listTDCSData,
+                                            ],
+                                          );
+                                          String fileName =
+                                              'tdcs_data-${tdcsTimeController.text}-${tdcsCurrent.toInt()}mA-'
+                                              '${DateTime.now().millisecondsSinceEpoch}.csv';
+
+                                          listToCsv(eegCsv, fileName);
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.yellow,
+                                  ),
+                                  child: const Text(
+                                    'Get tDCS CSV',
+                                    // style: TextStyle(color: Colors.white),
+                                  )),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: eegTimeController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ],
-                          decoration: const InputDecoration(
-                            hintText: 'Enter time in sec',
-                            border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.all(Radius.circular(10.0)),
-                                borderSide: BorderSide(color: Colors.green)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: eegButtonText == 'Run EEG'
-                                    ? Colors.purpleAccent
-                                    : Colors.deepOrange,
-                              ),
-                              onPressed: eegButtonText == 'Run EEG'
-                                  ? () {
-                                      if (eegTimeController.text.isNotEmpty) {
-                                        setState(() {
-                                          eegButtonText = 'Stop EEG';
-                                        });
-                                        startEeg();
-                                      } else {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                                'Please enter EEG time first'),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  : () {
-                                      stopEeg();
-
-                                      setState(() {
-                                        eegButtonText = 'Run EEG';
-                                      });
-                                    },
-                              child: Text(
-                                eegButtonText,
-                                style: const TextStyle(color: Colors.white),
-                              ))),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-              const Divider(),
-              const SizedBox(height: 20),
-
-              ///tDCS controls
-              Column(
-                children: [
-                  Slider(
-                      value: tdcsCurrent.toDouble(),
-                      min: 0.5,
-                      max: 3,
-                      divisions: 5,
-                      activeColor: Colors.blue,
-                      label: '${tdcsCurrent.toStringAsFixed(1)} mA',
-                      onChanged: (value) {
-                        setState(() {
-                          tdcsCurrent = value;
-                        });
-                      }),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: <Widget>[
-                        Text(
-                          '0.5 mA',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '1.0 mA',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '1.5 mA',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '2.0 mA',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '2.5 mA',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '3.0 mA',
-                          style: TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: tdcsTimeController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ],
-                          decoration: const InputDecoration(
-                            hintText: 'Enter time in sec',
-                            border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.all(Radius.circular(10.0)),
-                                borderSide: BorderSide(color: Colors.green)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: tdcsButtonText == 'Run tDCS'
-                                    ? Colors.blue
-                                    : Colors.deepOrange,
-                              ),
-                              onPressed: tdcsButtonText == 'Run tDCS'
-                                  ? () {
-                                      if (tdcsTimeController.text.isNotEmpty) {
-                                        setState(() {
-                                          tdcsButtonText = 'Stop tDCS';
-                                        });
-                                        startTdcs();
-                                      } else {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                                'Please enter tDCS time first'),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  : () {
-                                      stopTdcs();
-                                      setState(() {
-                                        tdcsButtonText = 'Run tDCS';
-                                      });
-                                    },
-                              child: Text(
-                                tdcsButtonText,
-                                style: const TextStyle(color: Colors.white),
-                              ))),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-              const Divider(),
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                        onPressed: listCh1.isEmpty
-                            ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Please run EEG first'),
-                                  ),
-                                );
-                              }
-                            : () {
-                                String eegCsv =
-                                    const ListToCsvConverter().convert(
-                                  [
-                                    [
-                                      'Total EEG data:',
-                                      '$eegCounts',
-                                      'Date',
-                                      (DateFormat('dd-MMMM-yyyy')
-                                          .format(DateTime.now()))
-                                    ],
-                                    ['Time', 'Ch1', 'Ch2', 'Ch3', 'Ch4'],
-                                    ...List.generate(listCh1.length, (index) {
-                                      return [
-                                        listOfTimeStamps[index],
-                                        listCh1[index],
-                                        listCh2[index],
-                                        listCh3[index],
-                                        listCh4[index],
-                                      ];
-                                    }),
-                                  ],
-                                );
-                                String fileName =
-                                    'eeg_data-${eegTimeController.text}-${eegFrequency.toInt()}hz-'
-                                    '${DateTime.now().millisecondsSinceEpoch}.csv';
-
-                                listToCsv(eegCsv, fileName);
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.yellow,
-                        ),
-                        child: const Text(
-                          'Get EEG CSV',
-                          // style: TextStyle(color: Colors.white),
-                        )),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                        onPressed: listTDCSData.isEmpty
-                            ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Please run tDCS first'),
-                                  ),
-                                );
-                              }
-                            : () {
-                                String eegCsv =
-                                    const ListToCsvConverter().convert(
-                                  [
-                                    [
-                                      'Total tDCS data:',
-                                      '$tdcsCounts',
-                                      'Date',
-                                      (DateFormat('dd-MMMM-yyyy')
-                                          .format(DateTime.now()))
-                                    ],
-                                    [
-                                      'Index',
-                                      'Time',
-                                      'Set Current',
-                                      'Actual Current'
-                                    ],
-                                    listTDCSData,
-                                  ],
-                                );
-                                String fileName =
-                                    'tdcs_data-${tdcsTimeController.text}-${tdcsCurrent.toInt()}mA-'
-                                    '${DateTime.now().millisecondsSinceEpoch}.csv';
-
-                                listToCsv(eegCsv, fileName);
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.yellow,
-                        ),
-                        child: const Text(
-                          'Get tDCS CSV',
-                          // style: TextStyle(color: Colors.white),
-                        )),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      )),
+                )),
     );
   }
 }

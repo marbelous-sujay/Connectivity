@@ -12,23 +12,26 @@ class SystemDeviceTile extends StatefulWidget {
     required this.device,
     required this.onOpen,
     required this.onConnect,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   State<SystemDeviceTile> createState() => _SystemDeviceTileState();
 }
 
 class _SystemDeviceTileState extends State<SystemDeviceTile> {
-  BluetoothConnectionState _connectionState = BluetoothConnectionState.disconnected;
+  BluetoothConnectionState _connectionState =
+      BluetoothConnectionState.disconnected;
 
-  late StreamSubscription<BluetoothConnectionState> _connectionStateSubscription;
+  late StreamSubscription<BluetoothConnectionState>
+      _connectionStateSubscription;
 
   @override
   void initState() {
     super.initState();
 
-    _connectionStateSubscription = widget.device.connectionState.listen((state) {
+    _connectionStateSubscription =
+        widget.device.connectionState.listen((state) {
       _connectionState = state;
       if (mounted) {
         setState(() {});
@@ -52,8 +55,8 @@ class _SystemDeviceTileState extends State<SystemDeviceTile> {
       title: Text(widget.device.platformName),
       subtitle: Text(widget.device.remoteId.str),
       trailing: ElevatedButton(
-        child: isConnected ? const Text('OPEN') : const Text('CONNECT'),
         onPressed: isConnected ? widget.onOpen : widget.onConnect,
+        child: isConnected ? const Text('OPEN') : const Text('CONNECT'),
       ),
     );
   }
