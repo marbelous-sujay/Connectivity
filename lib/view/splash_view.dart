@@ -1,4 +1,4 @@
-import 'package:connectivity/view/home_view.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -10,15 +10,12 @@ class SplashView extends StatefulWidget {
 }
 
 class _SplashViewState extends State<SplashView> {
-
-
   FlutterBluePlus flutterBluePlus = FlutterBluePlus();
   List<BluetoothDevice> deviceList = [];
   late BluetoothDevice selectedDevice;
   BluetoothConnectionState deviceState = BluetoothConnectionState.disconnected;
   List<BluetoothService> services = [];
   // StreamSubscription<BluetoothConnectionState>? deviceStateSubscription;
-
 
   @override
   void initState() {
@@ -36,31 +33,35 @@ class _SplashViewState extends State<SplashView> {
 
     FlutterBluePlus.isSupported.then((isAvailable) {
       if (!isAvailable) {
-        print('Bluetooth is not available on this device');
+        if (kDebugMode) {
+          print('Bluetooth is not available on this device');
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Bluetooth is not available on this device')),
+          const SnackBar(
+              content: Text('Bluetooth is not available on this device')),
         );
-      } else{
-        print('Bluetooth is available on this device');
+      } else {
+        if (kDebugMode) {
+          print('Bluetooth is available on this device');
+        }
 
         startScan();
       }
     });
   }
 
-  void startScan(){
+  void startScan() {
     FlutterBluePlus.startScan(timeout: const Duration(seconds: 60));
 
-    FlutterBluePlus.scanResults.listen((results){
-      for(ScanResult r in results){
-
+    FlutterBluePlus.scanResults.listen((results) {
+      for (ScanResult r in results) {
         //add all the scanned devices to the deviceList
-        if(!deviceList.contains(r.device)){
+        if (!deviceList.contains(r.device)) {
           deviceList.add(r.device);
         }
 
         //If the device found is EASE, then set addDevice to the current device
-        if(r.device.advName == 'EASE'){
+        if (r.device.advName == 'EASE') {
           selectedDevice = r.device;
           FlutterBluePlus.stopScan();
           // connectToDevice();
@@ -71,7 +72,6 @@ class _SplashViewState extends State<SplashView> {
       FlutterBluePlus.stopScan();
     });
   }
-
 
   // void connectToDevice() async {
   //   await selectedDevice.connect();
@@ -87,7 +87,11 @@ class _SplashViewState extends State<SplashView> {
   Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
-        child: Icon(Icons.bluetooth,size: 150,color: Colors.lightGreen,),
+        child: Icon(
+          Icons.bluetooth,
+          size: 150,
+          color: Colors.lightGreen,
+        ),
       ),
     );
   }

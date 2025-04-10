@@ -412,7 +412,7 @@ class _HomeViewState extends State<HomeView> {
     ]);
   }
 
-  stopTdcs() {
+  stopTdcs({required bool isForceTerminate}) {
     remainingTime = 0;
 
     setState(() {
@@ -422,7 +422,7 @@ class _HomeViewState extends State<HomeView> {
     BluetoothCharacteristic data =
         getBluetoothCharacteristics(easeServiceID, uuidTdcsSett);
 
-    writeValue(data, [1]);
+    writeValue(data, [if (isForceTerminate) 9 else 8]);
   }
 
   stopEeg() {
@@ -1096,7 +1096,8 @@ class _HomeViewState extends State<HomeView> {
                                                 }
                                               }
                                             : () {
-                                                stopTdcs();
+                                                stopTdcs(
+                                                    isForceTerminate: false);
                                                 setState(() {
                                                   tdcsButtonText = 'Run tDCS';
                                                 });
@@ -1108,6 +1109,35 @@ class _HomeViewState extends State<HomeView> {
                                         ))),
                               ],
                             ),
+                            const SizedBox(height: 10),
+                            if (mode == 'tDCS')
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    stopTdcs(isForceTerminate: true);
+                                    setState(() {
+                                      tdcsButtonText = 'Run tDCS';
+                                    });
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: Size.zero,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text(
+                                    'Force terminate tDCS',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: Colors.red,
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
 
